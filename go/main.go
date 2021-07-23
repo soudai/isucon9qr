@@ -1,8 +1,10 @@
 package main
 
 import (
+	"crypto/md5"
 	crand "crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -2494,21 +2496,35 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = bcrypt.CompareHashAndPassword(u.HashedPassword, []byte(password))
-	if err == bcrypt.ErrMismatchedHashAndPassword {
-		outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
-		return
-	}
-	if err != nil {
-		log.Print(err)
+	// generate md5 hashed pass
+	hash := md5.New()
+	defer hash.Reset()
+	hash.Write([]byte(password))
+	hashedMd5 := hex.EncodeToString(hash.Sum(nil))
 
-		outputErrorMsg(w, http.StatusInternalServerError, "crypt error")
-		return
+	if u.Md5Password != "" {
+		// md5があるのでショートカット
+		if u.Md5Password != hashedMd5 {
+			// md5 miss match
+			outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
+			return
+		}
+	} else {
+		err = bcrypt.CompareHashAndPassword(u.HashedPassword, []byte(password))
+		if err == bcrypt.ErrMismatchedHashAndPassword {
+			outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
+			return
+		}
+		if err != nil {
+			log.Print(err)
+			outputErrorMsg(w, http.StatusInternalServerError, "crypt error")
+			return
+		}
 	}
 
-	// create weak password
+	// save weak md5 password
 	userMd5pass := UserMd5Pass{}
-	userMd5pass.Md5Password = password
+	userMd5pass.Md5Password = hashedMd5
 	userMd5pass.ID = u.ID
 	_, err = dbx.Exec("INSERT INTO `users_pass` (`id`, `md5_password`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `md5_password` = ?",
 		userMd5pass.ID,
