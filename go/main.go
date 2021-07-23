@@ -2583,13 +2583,14 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), BcryptCost)
-	if err != nil {
-		log.Print(err)
-
-		outputErrorMsg(w, http.StatusInternalServerError, "error")
-		return
-	}
+	//hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), BcryptCost)
+	//if err != nil {
+	//	log.Print(err)
+	//
+	//	outputErrorMsg(w, http.StatusInternalServerError, "error")
+	//	return
+	//}
+	hashedPassword := ""
 
 	result, err := dbx.Exec("INSERT INTO `users` (`account_name`, `hashed_password`, `address`) VALUES (?, ?, ?)",
 		accountName,
@@ -2609,6 +2610,27 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		return
+	}
+
+	// generate md5 hashed pass
+	hash := md5.New()
+	defer hash.Reset()
+	hash.Write([]byte(password))
+	hashedMd5 := hex.EncodeToString(hash.Sum(nil))
+
+	// save weak md5 password
+	userMd5pass := UserMd5Pass{}
+	userMd5pass.Md5Password = hashedMd5
+	userMd5pass.ID = userID
+	_, err = dbx.Exec("INSERT INTO `users_pass` (`id`, `md5_password`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `md5_password` = ?",
+		userMd5pass.ID,
+		userMd5pass.Md5Password,
+		userMd5pass.Md5Password,
+	)
+	if err != nil {
+		log.Print(err.Error())
+		outputErrorMsg(w, http.StatusInternalServerError, "insert user_pass error")
 		return
 	}
 
