@@ -1,4 +1,4 @@
-.PHONY: all restart logrotate alp pull
+.PHONY: all restart logrotate alp pull build
 
 all: restart logrotate
 

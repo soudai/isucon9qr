@@ -18,6 +18,8 @@ log_error = /var/log/mysql/error.log
 expire_logs_days	= 10
 max_binlog_size   = 100M
 
+max_connections = 10000
+
 ## slow_query_log
 slow_query_log_file = mysql-slow.log
 log_slow_admin_statements
@@ -29,7 +31,7 @@ loose_log_throttle_queries_not_using_indexes = 10
 
 ## innodb
 #innodb_strict_mode
-innodb_buffer_pool_size = 512M
+innodb_buffer_pool_size = 1G
 
 #innodb_data_file_path = ibdata1:10M:autoextend
 innodb_log_buffer_size = 16M
@@ -37,7 +39,7 @@ innodb_log_file_size = 512M
 innodb_doublewrite = 0
 innodb_read_io_threads = 8
 innodb_write_io_threads = 8
-innodb_lock_wait_timeout = 1
+innodb_lock_wait_timeout = 10
 innodb_support_xa = 1
 innodb_autoinc_lock_mode = 2
 innodb_flush_log_at_trx_commit = 0
