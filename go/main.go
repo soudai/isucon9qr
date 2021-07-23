@@ -538,7 +538,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		// paging
 		var err error
 		rows, err = dbx.Queryx(
-`SELECT items.id,items.seller_id,items.status,items.name,items.price,items.image_url,items.category_id,items.created_at,users.id,users.account_name,users.num_sell_items FROM items
+`SELECT items.id,items.seller_id,items.status,items.name,items.price,items.category_id,items.created_at,items.image_name,users.id,users.account_name,users.num_sell_items FROM items
   INNER JOIN users
      ON users.id = items.seller_id
 WHERE status IN (?,?) AND (created_at < ?  OR (created_at <= ? AND id < ?)) ORDER BY items.created_at DESC, items.id DESC LIMIT ?`,
@@ -558,7 +558,7 @@ WHERE status IN (?,?) AND (created_at < ?  OR (created_at <= ? AND id < ?)) ORDE
 		// 1st page
 		var err error
 		rows, err = dbx.Queryx(
-`SELECT items.id,items.seller_id,items.status,items.name,items.price,items.image_url,items.category_id,items.created_at,users.id,users.account_name,users.num_sell_items FROM items
+`SELECT items.id,items.seller_id,items.status,items.name,items.price,items.category_id,items.created_at,items.image_name,users.id,users.account_name,users.num_sell_items FROM items
   INNER JOIN users
      ON users.id = items.seller_id
 WHERE status IN (?,?) ORDER BY items.created_at DESC, items.id DESC LIMIT ?`,
@@ -575,6 +575,7 @@ WHERE status IN (?,?) ORDER BY items.created_at DESC, items.id DESC LIMIT ?`,
 
 	for rows.Next() {
 		var item ItemSimple
+		var imageName string
 		seller := &UserSimple{}
 		err := rows.Scan(
 			&item.ID,
@@ -582,9 +583,9 @@ WHERE status IN (?,?) ORDER BY items.created_at DESC, items.id DESC LIMIT ?`,
 			&item.Status,
 			&item.Name,
 			&item.Price,
-			&item.ImageURL,
 			&item.CategoryID,
 			&item.CreatedAt,
+			&imageName,
 			&seller.ID,
 			&seller.AccountName,
 			&seller.NumSellItems,
@@ -594,6 +595,7 @@ WHERE status IN (?,?) ORDER BY items.created_at DESC, items.id DESC LIMIT ?`,
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
 			return
 		}
+		item.ImageURL = getImageURL(imageName)
 		item.Seller = seller
 		category, err := getCategoryByID(dbx, item.CategoryID)
 		if err != nil {
