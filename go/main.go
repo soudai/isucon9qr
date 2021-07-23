@@ -566,6 +566,7 @@ WHERE status IN (?,?) ORDER BY items.created_at DESC, items.id DESC LIMIT ?`,
 		}
 	}
 
+	defer rows.Close()
 	for rows.Next() {
 		var item ItemSimple
 		var imageName string
