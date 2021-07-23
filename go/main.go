@@ -1,8 +1,10 @@
 package main
 
 import (
+	"crypto/md5"
 	crand "crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -21,6 +23,9 @@ import (
 	goji "goji.io"
 	"goji.io/pat"
 	"golang.org/x/crypto/bcrypt"
+
+	//	pprof
+	_ "net/http/pprof"
 )
 
 const (
@@ -78,6 +83,22 @@ type User struct {
 	NumSellItems   int       `json:"num_sell_items" db:"num_sell_items"`
 	LastBump       time.Time `json:"-" db:"last_bump"`
 	CreatedAt      time.Time `json:"-" db:"created_at"`
+}
+
+type UserAndMd5Pass struct {
+	ID             int64     `json:"id" db:"id"`
+	AccountName    string    `json:"account_name" db:"account_name"`
+	HashedPassword []byte    `json:"-" db:"hashed_password"`
+	Md5Password    string    `json:"-" db:"md5_password"`
+	Address        string    `json:"address,omitempty" db:"address"`
+	NumSellItems   int       `json:"num_sell_items" db:"num_sell_items"`
+	LastBump       time.Time `json:"-" db:"last_bump"`
+	CreatedAt      time.Time `json:"-" db:"created_at"`
+}
+
+type UserMd5Pass struct {
+	ID          int64  `json:"id" db:"id"`
+	Md5Password string `json:"-" db:"md5_password"`
 }
 
 type UserSimple struct {
@@ -279,6 +300,10 @@ func init() {
 }
 
 func main() {
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+
 	host := os.Getenv("MYSQL_HOST")
 	if host == "" {
 		host = "127.0.0.1"
@@ -762,7 +787,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 
 	res := resInitialize{
 		// キャンペーン実施時には還元率の設定を返す。詳しくはマニュアルを参照のこと。
-		Campaign: 1,
+		Campaign: 0,
 		// 実装言語を返す
 		Language: "Go",
 	}
@@ -800,7 +825,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		// paging
 		var err error
 		rows, err = dbx.Queryx(
-`SELECT items.id,items.seller_id,items.status,items.name,items.price,items.category_id,items.created_at,items.image_name,users.id,users.account_name,users.num_sell_items FROM items
+			`SELECT items.id,items.seller_id,items.status,items.name,items.price,items.category_id,items.created_at,items.image_name,users.id,users.account_name,users.num_sell_items FROM items
   INNER JOIN users
      ON users.id = items.seller_id
 WHERE status IN (?,?) AND (items.created_at < ?  OR (items.created_at <= ? AND items.id < ?)) ORDER BY items.created_at DESC, items.id DESC LIMIT ?`,
@@ -820,7 +845,7 @@ WHERE status IN (?,?) AND (items.created_at < ?  OR (items.created_at <= ? AND i
 		// 1st page
 		var err error
 		rows, err = dbx.Queryx(
-`SELECT items.id,items.seller_id,items.status,items.name,items.price,items.category_id,items.created_at,items.image_name,users.id,users.account_name,users.num_sell_items FROM items
+			`SELECT items.id,items.seller_id,items.status,items.name,items.price,items.category_id,items.created_at,items.image_name,users.id,users.account_name,users.num_sell_items FROM items
   INNER JOIN users
      ON users.id = items.seller_id
 WHERE status IN (?,?) ORDER BY items.created_at DESC, items.id DESC LIMIT ?`,
@@ -2471,8 +2496,8 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u := User{}
-	err = dbx.Get(&u, "SELECT * FROM `users` WHERE `account_name` = ?", accountName)
+	u := UserAndMd5Pass{}
+	err = dbx.Get(&u, "SELECT users.id,users.account_name,users.hashed_password,IFNULL(users_pass.md5_password, '') as md5_password,users.address,users.num_sell_items,users.last_bump,users.created_at FROM `users` LEFT OUTER JOIN `users_pass` ON users.id = users_pass.id WHERE users.`account_name` = ?", accountName)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
 		return
@@ -2484,15 +2509,44 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = bcrypt.CompareHashAndPassword(u.HashedPassword, []byte(password))
-	if err == bcrypt.ErrMismatchedHashAndPassword {
-		outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
-		return
-	}
-	if err != nil {
-		log.Print(err)
+	// generate md5 hashed pass
+	hash := md5.New()
+	defer hash.Reset()
+	hash.Write([]byte(password))
+	hashedMd5 := hex.EncodeToString(hash.Sum(nil))
 
-		outputErrorMsg(w, http.StatusInternalServerError, "crypt error")
+	if u.Md5Password != "" {
+		// md5があるのでショートカット
+		if u.Md5Password != hashedMd5 {
+			// md5 miss match
+			outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
+			return
+		}
+	} else {
+		err = bcrypt.CompareHashAndPassword(u.HashedPassword, []byte(password))
+		if err == bcrypt.ErrMismatchedHashAndPassword {
+			outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
+			return
+		}
+		if err != nil {
+			log.Print(err)
+			outputErrorMsg(w, http.StatusInternalServerError, "crypt error")
+			return
+		}
+	}
+
+	// save weak md5 password
+	userMd5pass := UserMd5Pass{}
+	userMd5pass.Md5Password = hashedMd5
+	userMd5pass.ID = u.ID
+	_, err = dbx.Exec("INSERT INTO `users_pass` (`id`, `md5_password`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `md5_password` = ?",
+		userMd5pass.ID,
+		userMd5pass.Md5Password,
+		userMd5pass.Md5Password,
+	)
+	if err != nil {
+		log.Print(err.Error())
+		outputErrorMsg(w, http.StatusInternalServerError, "insert user_pass error")
 		return
 	}
 
