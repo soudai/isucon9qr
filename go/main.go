@@ -1195,19 +1195,11 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tx := dbx.MustBegin()
-	var rows *sqlx.Rows
+	items := []Item{}
 	if itemID > 0 && createdAt > 0 {
-		var err error
 		// paging
-		rows, err = tx.Queryx(
-			`SELECT items.id,items.seller_id,items.buyer_id,omitempty,items.status,items.name,items.price,items.description,items.image_url,items.category_id,items.created_at,
-				seller.id,seller.account_name,seller.num_sell_items,buyer.account_name,buyer.num_sell_items
-				FROM items
-  INNER JOIN users seller
-     ON seller.id = items.seller_id
-  LEFT OUTER JOIN users buyer
-     ON buyer.id = items.buyer_id
-WHERE (seller_id = ? OR buyer_id = ?) AND status IN (?,?,?,?,?) AND (created_at < ?  OR (created_at <= ? AND id < ?))  ORDER BY items.created_at DESC, items.id DESC LIMIT ?`,
+		err := tx.Select(&items,
+			"SELECT * FROM `items` WHERE (`seller_id` = ? OR `buyer_id` = ?) AND `status` IN (?,?,?,?,?) AND (`created_at` < ?  OR (`created_at` <= ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
 			user.ID,
 			user.ID,
 			ItemStatusOnSale,
@@ -1227,17 +1219,9 @@ WHERE (seller_id = ? OR buyer_id = ?) AND status IN (?,?,?,?,?) AND (created_at 
 			return
 		}
 	} else {
-		var err error
 		// 1st page
-		rows, err = tx.Queryx(
-			`SELECT items.id,items.seller_id,items.buyer_id,items.status,items.name,items.price,items.description,items.image_name,items.category_id,items.created_at,
-				seller.id,seller.account_name,seller.num_sell_items,buyer.account_name,buyer.num_sell_items
-				FROM items
-  INNER JOIN users seller
-     ON seller.id = items.seller_id
-  LEFT OUTER JOIN users buyer
-     ON buyer.id = items.buyer_id
-WHERE (seller_id = ? OR buyer_id = ?) AND status IN (?,?,?,?,?) ORDER BY items.created_at DESC, items.id DESC LIMIT ?`,
+		err := tx.Select(&items,
+			"SELECT * FROM `items` WHERE (`seller_id` = ? OR `buyer_id` = ?) AND `status` IN (?,?,?,?,?) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
 			user.ID,
 			user.ID,
 			ItemStatusOnSale,
@@ -1256,53 +1240,52 @@ WHERE (seller_id = ? OR buyer_id = ?) AND status IN (?,?,?,?,?) ORDER BY items.c
 	}
 
 	itemDetails := []ItemDetail{}
-	defer rows.Close()
-	for rows.Next() {
-		var itemDetail ItemDetail
-		var seller UserSimple
-		var buyer UserSimple
-		var imageName string
-		var createdAt time.Time
-		var buyerAccountName sql.NullString
-		var buyerNumSellItems sql.NullInt64
-		err = rows.Scan(
-			&itemDetail.ID,
-			&itemDetail.SellerID,
-			&itemDetail.BuyerID,
-			&itemDetail.Status,
-			&itemDetail.Name,
-			&itemDetail.Price,
-			&itemDetail.Description,
-			&imageName,
-			&itemDetail.CategoryID,
-			&seller.ID,
-			&seller.AccountName,
-			&seller.NumSellItems,
-			&buyerAccountName,
-			&buyerNumSellItems,
-		)
+	for _, item := range items {
+		seller, err := getUserSimpleByID(tx, item.SellerID)
 		if err != nil {
-			log.Print(err)
-			outputErrorMsg(w, http.StatusInternalServerError, "db error")
+			outputErrorMsg(w, http.StatusNotFound, "seller not found")
 			tx.Rollback()
 			return
 		}
-		category, err := getCategoryByID(tx, itemDetail.CategoryID)
+		category, err := getCategoryByID(tx, item.CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			tx.Rollback()
 			return
 		}
-		itemDetail.Category = &category
-		itemDetail.CreatedAt = createdAt.Unix()
-		if buyerAccountName.Valid && buyerNumSellItems.Valid {
-			buyer.AccountName = buyerAccountName.String
-			buyer.NumSellItems = int(buyerNumSellItems.Int64)
-			buyer.ID = itemDetail.BuyerID
+
+		itemDetail := ItemDetail{
+			ID:       item.ID,
+			SellerID: item.SellerID,
+			Seller:   &seller,
+			// BuyerID
+			// Buyer
+			Status:      item.Status,
+			Name:        item.Name,
+			Price:       item.Price,
+			Description: item.Description,
+			ImageURL:    getImageURL(item.ImageName),
+			CategoryID:  item.CategoryID,
+			// TransactionEvidenceID
+			// TransactionEvidenceStatus
+			// ShippingStatus
+			Category:  &category,
+			CreatedAt: item.CreatedAt.Unix(),
+		}
+
+		if item.BuyerID != 0 {
+			buyer, err := getUserSimpleByID(tx, item.BuyerID)
+			if err != nil {
+				outputErrorMsg(w, http.StatusNotFound, "buyer not found")
+				tx.Rollback()
+				return
+			}
+			itemDetail.BuyerID = item.BuyerID
+			itemDetail.Buyer = &buyer
 		}
 
 		transactionEvidence := TransactionEvidence{}
-		err = tx.Get(&transactionEvidence, "SELECT * FROM `transaction_evidences` WHERE `item_id` = ?", itemDetail.ID)
+		err = tx.Get(&transactionEvidence, "SELECT * FROM `transaction_evidences` WHERE `item_id` = ?", item.ID)
 		if err != nil && err != sql.ErrNoRows {
 			// It's able to ignore ErrNoRows
 			log.Print(err)
