@@ -21,9 +21,6 @@ import (
 	goji "goji.io"
 	"goji.io/pat"
 	"golang.org/x/crypto/bcrypt"
-
-	//	pprof
-	_ "net/http/pprof"
 )
 
 const (
@@ -282,10 +279,6 @@ func init() {
 }
 
 func main() {
-	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
-
 	host := os.Getenv("MYSQL_HOST")
 	if host == "" {
 		host = "127.0.0.1"
@@ -500,7 +493,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 
 	res := resInitialize{
 		// キャンペーン実施時には還元率の設定を返す。詳しくはマニュアルを参照のこと。
-		Campaign: 0,
+		Campaign: 1,
 		// 実装言語を返す
 		Language: "Go",
 	}
@@ -576,6 +569,7 @@ WHERE status IN (?,?) ORDER BY items.created_at DESC, items.id DESC LIMIT ?`,
 	for rows.Next() {
 		var item ItemSimple
 		var imageName string
+		var createdAt time.Time
 		seller := &UserSimple{}
 		err := rows.Scan(
 			&item.ID,
@@ -584,7 +578,7 @@ WHERE status IN (?,?) ORDER BY items.created_at DESC, items.id DESC LIMIT ?`,
 			&item.Name,
 			&item.Price,
 			&item.CategoryID,
-			&item.CreatedAt,
+			&createdAt,
 			&imageName,
 			&seller.ID,
 			&seller.AccountName,
@@ -596,6 +590,7 @@ WHERE status IN (?,?) ORDER BY items.created_at DESC, items.id DESC LIMIT ?`,
 			return
 		}
 		item.ImageURL = getImageURL(imageName)
+		item.CreatedAt = createdAt.Unix()
 		item.Seller = seller
 		category, err := getCategoryByID(dbx, item.CategoryID)
 		if err != nil {
