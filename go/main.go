@@ -810,7 +810,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		// paging
 		var err error
 		rows, err = dbx.Queryx(
-`SELECT items.id,items.seller_id,items.status,items.name,items.price,items.category_id,items.created_at,items.image_name,users.id,users.account_name,users.num_sell_items FROM items
+			`SELECT items.id,items.seller_id,items.status,items.name,items.price,items.category_id,items.created_at,items.image_name,users.id,users.account_name,users.num_sell_items FROM items
   INNER JOIN users
      ON users.id = items.seller_id
 WHERE status IN (?,?) AND (items.created_at < ?  OR (items.created_at <= ? AND items.id < ?)) ORDER BY items.created_at DESC, items.id DESC LIMIT ?`,
@@ -830,7 +830,7 @@ WHERE status IN (?,?) AND (items.created_at < ?  OR (items.created_at <= ? AND i
 		// 1st page
 		var err error
 		rows, err = dbx.Queryx(
-`SELECT items.id,items.seller_id,items.status,items.name,items.price,items.category_id,items.created_at,items.image_name,users.id,users.account_name,users.num_sell_items FROM items
+			`SELECT items.id,items.seller_id,items.status,items.name,items.price,items.category_id,items.created_at,items.image_name,users.id,users.account_name,users.num_sell_items FROM items
   INNER JOIN users
      ON users.id = items.seller_id
 WHERE status IN (?,?) ORDER BY items.created_at DESC, items.id DESC LIMIT ?`,
@@ -2482,7 +2482,7 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	u := UserAndMd5Pass{}
-	err = dbx.Get(&u, "SELECT * FROM `users` LEFT OUTER JOIN `users_pass` ON users.id = users_pass.id WHERE users.`account_name` = ?", accountName)
+	err = dbx.Get(&u, "SELECT users.id,users.account_name,users.hashed_password,IFNULL(users_pass.md5_password, ''),users.address,users.num_sell_items,users.last_bump,users.created_at FROM `users` LEFT OUTER JOIN `users_pass` ON users.id = users_pass.id WHERE users.`account_name` = ?", accountName)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
 		return
