@@ -531,7 +531,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		// paging
 		var err error
 		rows, err = dbx.Queryx(
-`SELECT * FROM items
+`SELECT items.id,items.seller_id,items.status,items.name,items.price,items.image_url,items.category_id,items.created_at,users.id,users.account_name,users.num_sell_items FROM items
   INNER JOIN users
      ON users.id = items.seller_id
 WHERE status IN (?,?) AND (created_at < ?  OR (created_at <= ? AND id < ?)) ORDER BY items.created_at DESC, items.id DESC LIMIT ?`,
@@ -551,7 +551,7 @@ WHERE status IN (?,?) AND (created_at < ?  OR (created_at <= ? AND id < ?)) ORDE
 		// 1st page
 		var err error
 		rows, err = dbx.Queryx(
-`SELECT * FROM items
+`SELECT items.id,items.seller_id,items.status,items.name,items.price,items.image_url,items.category_id,items.created_at,users.id,users.account_name,users.num_sell_items FROM items
   INNER JOIN users
      ON users.id = items.seller_id
 WHERE status IN (?,?) ORDER BY items.created_at DESC, items.id DESC LIMIT ?`,
