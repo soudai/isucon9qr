@@ -348,6 +348,9 @@ func main() {
 		log.Fatalf("failed to connect to DB: %s.", err.Error())
 	}
 	defer dbx.Close()
+	dbx.SetMaxOpenConns(512)
+	dbx.SetMaxIdleConns(512)
+	dbx.SetConnMaxLifetime(10 *time.Second)
 
 	mux := goji.NewMux()
 
