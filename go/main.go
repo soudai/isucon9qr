@@ -2231,14 +2231,14 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// create weak password
 	userMd5pass := UserMd5Pass{}
-
 	userMd5pass.Md5Password = password
 	userMd5pass.ID = u.ID
-	_, err = dbx.Exec("INSERT INTO `users_pass` (`id`, `md5_password`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `id` = ?",
+	_, err = dbx.Exec("INSERT INTO `users_pass` (`id`, `md5_password`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `md5_password` = ?",
 		userMd5pass.ID,
 		userMd5pass.Md5Password,
-		userMd5pass.ID,
+		userMd5pass.Md5Password,
 	)
 	if err != nil {
 		log.Print(err.Error())
