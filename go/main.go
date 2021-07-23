@@ -534,7 +534,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 `SELECT items.id,items.seller_id,items.status,items.name,items.price,items.category_id,items.created_at,items.image_name,users.id,users.account_name,users.num_sell_items FROM items
   INNER JOIN users
      ON users.id = items.seller_id
-WHERE status IN (?,?) AND (items.created_at < ?  OR (items.created_at <= ? AND id < ?)) ORDER BY items.created_at DESC, items.id DESC LIMIT ?`,
+WHERE status IN (?,?) AND (items.created_at < ?  OR (items.created_at <= ? AND items.id < ?)) ORDER BY items.created_at DESC, items.id DESC LIMIT ?`,
 			ItemStatusOnSale,
 			ItemStatusSoldOut,
 			time.Unix(createdAt, 0),
