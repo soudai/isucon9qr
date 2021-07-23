@@ -1200,7 +1200,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		var err error
 		// paging
 		rows, err = tx.Queryx(
-			`SELECT items.id,items.seller_id,items.buyer_id,omitempty,items.status,items.name,items.price,items.description,items.image_url,items.category_id,items.created_at,
+			`SELECT items.id,items.seller_id,items.buyer_id,items.status,items.name,items.price,items.description,items.image_url,items.category_id,items.created_at,
 				seller.id,seller.account_name,seller.num_sell_items,buyer.account_name,buyer.num_sell_items
 				FROM items
   INNER JOIN users seller
@@ -1275,6 +1275,7 @@ WHERE (seller_id = ? OR buyer_id = ?) AND status IN (?,?,?,?,?) ORDER BY items.c
 			&itemDetail.Description,
 			&imageName,
 			&itemDetail.CategoryID,
+			&createdAt,
 			&seller.ID,
 			&seller.AccountName,
 			&seller.NumSellItems,
@@ -1295,6 +1296,7 @@ WHERE (seller_id = ? OR buyer_id = ?) AND status IN (?,?,?,?,?) ORDER BY items.c
 		}
 		itemDetail.Category = &category
 		itemDetail.CreatedAt = createdAt.Unix()
+		itemDetail.ImageURL = getImageURL(imageName)
 		if buyerAccountName.Valid && buyerNumSellItems.Valid {
 			buyer.AccountName = buyerAccountName.String
 			buyer.NumSellItems = int(buyerNumSellItems.Int64)
