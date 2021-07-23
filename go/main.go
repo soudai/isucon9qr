@@ -959,7 +959,10 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 	if itemID > 0 && createdAt > 0 {
 		// paging
 		inQuery, inArgs, err = sqlx.In(
-			"SELECT * FROM `items` WHERE `status` IN (?,?) AND category_id IN (?) AND (`created_at` < ?  OR (`created_at` <= ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+			`SELECT items.id,items.seller_id,items.status,items.name,items.price,items.category_id,items.created_at,items.image_name,users.id,users.account_name,users.num_sell_items FROM items
+  INNER JOIN users
+     ON users.id = items.seller_id
+WHERE status IN (?,?) AND category_id IN (?) AND (items.created_at < ?  OR (items.created_at <= ? AND items.id < ?)) ORDER BY items.created_at DESC, items.id DESC LIMIT ?`,
 			ItemStatusOnSale,
 			ItemStatusSoldOut,
 			categoryIDs,
@@ -976,7 +979,10 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// 1st page
 		inQuery, inArgs, err = sqlx.In(
-			"SELECT * FROM `items` WHERE `status` IN (?,?) AND category_id IN (?) ORDER BY created_at DESC, id DESC LIMIT ?",
+			`SELECT items.id,items.seller_id,items.status,items.name,items.price,items.category_id,items.created_at,items.image_name,users.id,users.account_name,users.num_sell_items FROM items
+  INNER JOIN users
+     ON users.id = items.seller_id
+WHERE status IN (?,?) AND category_id IN (?) ORDER BY items.created_at DESC, items.id DESC LIMIT ?`,
 			ItemStatusOnSale,
 			ItemStatusSoldOut,
 			categoryIDs,
@@ -989,39 +995,48 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	items := []Item{}
-	err = dbx.Select(&items, inQuery, inArgs...)
-
+	rows, err := dbx.Queryx(inQuery, inArgs...)
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		return
 	}
+	defer rows.Close()
 
 	itemSimples := []ItemSimple{}
-	for _, item := range items {
-		seller, err := getUserSimpleByID(dbx, item.SellerID)
+	for rows.Next() {
+		var item ItemSimple
+		var imageName string
+		var createdAt time.Time
+		seller := &UserSimple{}
+		err := rows.Scan(
+			&item.ID,
+			&item.SellerID,
+			&item.Status,
+			&item.Name,
+			&item.Price,
+			&item.CategoryID,
+			&createdAt,
+			&imageName,
+			&seller.ID,
+			&seller.AccountName,
+			&seller.NumSellItems,
+		)
 		if err != nil {
-			outputErrorMsg(w, http.StatusNotFound, "seller not found")
+			log.Print(err)
+			outputErrorMsg(w, http.StatusInternalServerError, "db error")
 			return
 		}
+		item.ImageURL = getImageURL(imageName)
+		item.CreatedAt = createdAt.Unix()
+		item.Seller = seller
 		category, err := getCategoryByID(dbx, item.CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			return
 		}
-		itemSimples = append(itemSimples, ItemSimple{
-			ID:         item.ID,
-			SellerID:   item.SellerID,
-			Seller:     &seller,
-			Status:     item.Status,
-			Name:       item.Name,
-			Price:      item.Price,
-			ImageURL:   getImageURL(item.ImageName),
-			CategoryID: item.CategoryID,
-			Category:   &category,
-			CreatedAt:  item.CreatedAt.Unix(),
-		})
+		item.Category = &category
+		itemSimples = append(itemSimples, item)
 	}
 
 	hasNext := false
@@ -1039,7 +1054,6 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(rni)
-
 }
 
 func getUserItems(w http.ResponseWriter, r *http.Request) {
