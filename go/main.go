@@ -944,7 +944,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 			ItemsPerPage+1,
 		)
 		if err != nil {
-			l	og.Print(err)
+			log.Print(err)
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
 			return
 		}
