@@ -10,6 +10,7 @@ pull:
 
 restart: pull build logrotate
 	sudo systemctl restart isucari.golang.service
+	sudo systemctl restart nginx
 
 logrotate:
 	./logrotate.sh
