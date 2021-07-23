@@ -23,6 +23,7 @@ import (
 	goji "goji.io"
 	"goji.io/pat"
 	"golang.org/x/crypto/bcrypt"
+	"gopkg.in/boj/redistore.v1"
 
 	//	pprof
 	_ "net/http/pprof"
@@ -290,7 +291,11 @@ type resSetting struct {
 }
 
 func init() {
-	store = sessions.NewCookieStore([]byte("abc"))
+	var err error
+	store, err = redistore.NewRediStore(10, "tcp", os.Getenv("MYSQL_HOST")+":6379", "", []byte("abc"))
+	if err != nil {
+		panic(err)
+	}
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
