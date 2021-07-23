@@ -83,6 +83,22 @@ type User struct {
 	CreatedAt      time.Time `json:"-" db:"created_at"`
 }
 
+type UserAndMd5Pass struct {
+	ID             int64     `json:"id" db:"id"`
+	AccountName    string    `json:"account_name" db:"account_name"`
+	HashedPassword []byte    `json:"-" db:"hashed_password"`
+	Md5Password    string    `json:"-" db:"md5_password"`
+	Address        string    `json:"address,omitempty" db:"address"`
+	NumSellItems   int       `json:"num_sell_items" db:"num_sell_items"`
+	LastBump       time.Time `json:"-" db:"last_bump"`
+	CreatedAt      time.Time `json:"-" db:"created_at"`
+}
+
+type UserMd5Pass struct {
+	ID          int64  `json:"id" db:"id"`
+	Md5Password string `json:"-" db:"md5_password"`
+}
+
 type UserSimple struct {
 	ID           int64  `json:"id"`
 	AccountName  string `json:"account_name"`
@@ -2190,8 +2206,8 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u := User{}
-	err = dbx.Get(&u, "SELECT * FROM `users` WHERE `account_name` = ?", accountName)
+	u := UserAndMd5Pass{}
+	err = dbx.Get(&u, "SELECT * FROM `users` LEFT OUTER JOIN `users_pass` ON users.id = users_pass.id WHERE users.`account_name` = ?", accountName)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
 		return
@@ -2215,13 +2231,27 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userMd5pass := UserMd5Pass{}
+
+	userMd5pass.Md5Password = password
+	userMd5pass.ID = u.ID
+	_, err = dbx.Exec("INSERT INTO `users_pass` (`id`, `md5_password`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `id` = ?",
+		userMd5pass.ID,
+		userMd5pass.Md5Password,
+		userMd5pass.ID,
+	)
+	if err != nil {
+		log.Print(err.Error())
+		outputErrorMsg(w, http.StatusInternalServerError, "insert user_pass error")
+		return
+	}
+
 	session := getSession(r)
 
 	session.Values["user_id"] = u.ID
 	session.Values["csrf_token"] = secureRandomStr(20)
 	if err = session.Save(r, w); err != nil {
 		log.Print(err)
-
 		outputErrorMsg(w, http.StatusInternalServerError, "session error")
 		return
 	}
