@@ -516,7 +516,7 @@ var categories = map[int]Category{
 
 	30: {
 		ID:                 30,
-		ParentID:           30,
+		ParentID:           0,
 		CategoryName:       "オフィスチェア",
 		ParentCategoryName: "",
 	},
