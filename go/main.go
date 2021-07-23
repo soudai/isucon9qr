@@ -2482,7 +2482,7 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	u := UserAndMd5Pass{}
-	err = dbx.Get(&u, "SELECT users.id,users.account_name,users.hashed_password,IFNULL(users_pass.md5_password, ''),users.address,users.num_sell_items,users.last_bump,users.created_at FROM `users` LEFT OUTER JOIN `users_pass` ON users.id = users_pass.id WHERE users.`account_name` = ?", accountName)
+	err = dbx.Get(&u, "SELECT users.id,users.account_name,users.hashed_password,IFNULL(users_pass.md5_password, '') as md5_password,users.address,users.num_sell_items,users.last_bump,users.created_at FROM `users` LEFT OUTER JOIN `users_pass` ON users.id = users_pass.id WHERE users.`account_name` = ?", accountName)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
 		return
